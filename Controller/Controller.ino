@@ -16,24 +16,27 @@
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
 #include <WiFiClient.h>
+#include <ArduinoOTA.h>
 #define DEBUG_WEBSOCKETS true
 ESP8266WiFiMulti WiFiMulti;
 WebSocketsClient webSocket;
 DHTesp dht;
 IRsend irsend(4);  // An IR LED is controlled by GPIO pin 4 (D2)
-#define MyApiKey "YOURAPI" // TODO: Change to your sinric API Key. Your API Key is displayed on sinric.com dashboard
-#define MySSID "SSID" // TODO: Change to your Wifi network SSID
-#define MyWifiPassword "PASSWORD" // TODO: Change to your Wifi network password
+#define MyApiKey "***" // TODO: Change to your sinric API Key. Your API Key is displayed on sinric.com dashboard
+#define MySSID "*****" // TODO: Change to your Wifi network SSID
+#define MyWifiPassword "*******" // TODO: Change to your Wifi network password
 
 #define HEARTBEAT_INTERVAL  500000 // 5 Minutes 
 #define TEMPRATURE_INTERVAL 300000 // 3 Minutes 
+#define WIFI_INTERVAL 300000 // 3 Minutes 
+
 int currenttemp;
 float roomtemp;
 float humid;
 #define SERVER_URL "iot.sinric.com" //"iot.sinric.com"
 #define SERVER_PORT 80 // 80
 void setSetTemperatureSettingOnServer(String deviceId, float setPoint, String scale, float ambientTemperature, float ambientHumidity);
-
+uint64_t WifiStatusTimeStamp = 0;
 uint64_t heartbeatTimestamp = 0;
 uint64_t tempratureUpdateTimestamp = 0;
 bool isConnected = false;
@@ -41,8 +44,6 @@ bool isConnected = false;
 void turnOn(String deviceId) {
   uint16_t rawData[199] = {4460, 4336,  614, 1568,  612, 486,  610, 1572,  614, 1568,  614, 486,  610, 486,  610, 1568,  612, 488,  610, 488,  610, 1572,  612, 486,  610, 486,  610, 1568,  612, 1568,  612, 486,  610, 1574,  612, 488,  610, 486,  610, 1572,  612, 1568,  612, 1568,  614, 1568,  614, 1568,  614, 1570,  612, 1576,  614, 1568,  612, 486,  610, 486,  610, 486,  610, 486,  608, 486,  608, 488,  608, 1574,  612, 1568,  612, 486,  610, 486,  610, 486,  610, 486,  610, 486,  608, 488,  608, 488,  608, 486,  608, 1572,  612, 1568,  612, 1568,  614, 1568,  612, 1568,  614, 1570,  620, 5172,  4488, 4310,  614, 1568,  614, 486,  610, 1572,  612, 1568,  612, 486,  610, 486,  610, 1568,  612, 488,  608, 488,  610, 1572,  612, 486,  610, 486,  610, 1568,  612, 1568,  612, 486,  610, 1576,  612, 488,  610, 486,  610, 1574,  612, 1568,  612, 1568,  614, 1568,  614, 1568,  614, 1570,  612, 1576,  612, 1570,  614, 484,  610, 486,  610, 486,  608, 486,  608, 488,  608, 488,  608, 1574,  612, 1568,  612, 486,  608, 486,  610, 486,  608, 488,  608, 486,  608, 488,  608, 490,  608, 486,  608, 1572,  612, 1568,  612, 1568,  612, 1568,  612, 1568,  614, 1572,  618};  // COOLIX B23FC0
 
-  if (deviceId == "id") // Device ID of first device
-  {  
     Serial.print("Turn on device id: ");
     Serial.println(deviceId);
 //    irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. AC ON HEX: 0xB23FC0
@@ -116,32 +117,21 @@ void turnOn(String deviceId) {
             currenttemp=30;
             break;
                                                              
-       }
-    }
+     }
+ 
+   }
+ } 
 
-  } 
-  else {
-    Serial.print("Turn on for unknown device id: ");
-    Serial.println(deviceId);    
-  }     
-}
 void turnOff(String deviceId) {
-  uint16_t rawData[199] = {4416, 4402,  582, 1600,  582, 516,  580, 1604,  582, 1600,  584, 516,  578, 518,  578, 1600,  582, 518,  580, 518,  580, 1604,  582, 516,  578, 516,  578, 1600,  582, 1598,  582, 516,  580, 1604,  606, 494,  580, 1598,  608, 1574,  608, 1574,  608, 1574,  608, 490,  582, 1602,  608, 1576,  608, 1580,  608, 490,  580, 516,  580, 516,  580, 516,  578, 1600,  606, 492,  580, 518,  580, 1604,  608, 1574,  606, 1574,  608, 492,  580, 516,  580, 516,  578, 516,  578, 518,  580, 518,  578, 516,  578, 516,  578, 1602,  604, 1576,  582, 1598,  584, 1598,  582, 1600,  640, 5150,  4410, 4388,  584, 1598,  582, 516,  578, 1604,  584, 1600,  582, 516,  578, 520,  576, 1600,  580, 520,  576, 524,  532, 1648,  580, 518,  532, 562,  534, 1644,  578, 1602,  578, 520,  534, 1650,  536, 566,  532, 1644,  536, 1646,  536, 1644,  536, 1646,  536, 562,  534, 1650,  536, 1648,  536, 1652,  536, 562,  534, 562,  534, 562,  534, 562,  532, 1644,  536, 562,  532, 564,  534, 1650,  534, 1646,  536, 1646,  536, 562,  534, 562,  534, 562,  532, 562,  532, 564,  532, 564,  534, 562,  532, 562,  532, 1648,  534, 1646,  536, 1644,  536, 1646,  536, 1648,  614};  // COOLIX B27BE0
-   if (deviceId == "id") // Device ID of first device
-   {  
+    uint16_t rawData[199] = {4416, 4402,  582, 1600,  582, 516,  580, 1604,  582, 1600,  584, 516,  578, 518,  578, 1600,  582, 518,  580, 518,  580, 1604,  582, 516,  578, 516,  578, 1600,  582, 1598,  582, 516,  580, 1604,  606, 494,  580, 1598,  608, 1574,  608, 1574,  608, 1574,  608, 490,  582, 1602,  608, 1576,  608, 1580,  608, 490,  580, 516,  580, 516,  580, 516,  578, 1600,  606, 492,  580, 518,  580, 1604,  608, 1574,  606, 1574,  608, 492,  580, 516,  580, 516,  578, 516,  578, 518,  580, 518,  578, 516,  578, 516,  578, 1602,  604, 1576,  582, 1598,  584, 1598,  582, 1600,  640, 5150,  4410, 4388,  584, 1598,  582, 516,  578, 1604,  584, 1600,  582, 516,  578, 520,  576, 1600,  580, 520,  576, 524,  532, 1648,  580, 518,  532, 562,  534, 1644,  578, 1602,  578, 520,  534, 1650,  536, 566,  532, 1644,  536, 1646,  536, 1644,  536, 1646,  536, 562,  534, 1650,  536, 1648,  536, 1652,  536, 562,  534, 562,  534, 562,  534, 562,  532, 1644,  536, 562,  532, 564,  534, 1650,  534, 1646,  536, 1646,  536, 562,  534, 562,  534, 562,  532, 562,  532, 564,  532, 564,  534, 562,  532, 562,  532, 1648,  534, 1646,  536, 1644,  536, 1646,  536, 1648,  614};  // COOLIX B27BE0
+    
      Serial.print("Turn off Device ID: ");
      Serial.println(deviceId);
      irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. AC OFF HEX: 0xB27BE0
      Serial.print("Transmitted");
-
-   }
-  else {
-     Serial.print("Turn off for unknown device id: ");
-     Serial.println(deviceId);    
-  }
 }
 void lowertemp(String deviceId){
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*****") // Device ID of first device
    {  
        switch(currenttemp)
        {
@@ -199,8 +189,7 @@ void lowertemp(String deviceId){
    }
 }
 void increasetemp(String deviceId){
-  if (deviceId == "id") // Device ID of first device
-   {  
+  
        switch(currenttemp)
        {
         case 20:
@@ -252,13 +241,12 @@ void increasetemp(String deviceId){
             thirty(deviceId);
             Serial.println("Set to 30"); 
             currenttemp=30;
-            break;
-       }
+            break; 
    }
 }
 void twenty(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*****") // Device ID of first device
   {
   uint16_t rawData[199] = {4388, 4398,  578, 1606,  576, 520,  576, 1610,  576, 1606,  576, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  576, 1604,  578, 1604,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  574, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  576, 518,  576, 522,  574, 522,  574, 520,  574, 1610,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  576, 1606,  576, 1606,  576, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  610, 5180,  4434, 4356,  578, 1608,  574, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1608,  576, 522,  576, 518,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  574, 1606,  576, 1606,  574, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 520,  574, 1610,  576, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 1608,  574, 1606,  576, 520,  576, 1608,  576, 1606,  576, 1606,  576, 1606,  576, 1610,  610};  // COOLIX B23F20
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -268,7 +256,7 @@ void twenty(String deviceId)
 }
 void twentyone(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*****") // Device ID of first device
   {
   uint16_t rawData[199] = {4438, 4354,  578, 1606,  576, 520,  576, 1608,  576, 1606,  576, 522,  574, 520,  576, 1604,  576, 522,  574, 522,  574, 1608,  576, 520,  574, 520,  574, 1604,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  576, 1608,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1606,  576, 1606,  576, 520,  574, 520,  574, 520,  576, 520,  574, 522,  574, 1606,  576, 520,  574, 520,  576, 1604,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  610, 5156,  4438, 4354,  578, 1606,  576, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  574, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1604,  576, 1608,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 1608,  576, 522,  574, 520,  574, 1604,  576, 1608,  574, 1606,  576, 1606,  576, 1610,  610};  // COOLIX B23F60  
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -278,7 +266,7 @@ void twentyone(String deviceId)
 }
 void twentytwo(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*****") // Device ID of first device
   {
   uint16_t rawData[199] = {4414, 4398,  578, 1606,  576, 520,  574, 1610,  576, 1606,  576, 522,  574, 520,  574, 1604,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  576, 1604,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1608,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  576, 520,  574, 520,  574, 520,  576, 522,  574, 522,  574, 1606,  576, 1606,  576, 1606,  576, 520,  574, 520,  574, 520,  576, 522,  574, 1612,  576, 520,  574, 520,  576, 520,  574, 1610,  576, 1606,  576, 1608,  576, 1606,  610, 5182,  4436, 4356,  578, 1606,  576, 520,  574, 1610,  578, 1606,  576, 520,  574, 520,  574, 1606,  574, 522,  574, 522,  574, 1610,  576, 520,  574, 522,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 522,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1606,  576, 1606,  574, 1606,  576, 520,  574, 520,  574, 520,  574, 522,  574, 1612,  576, 520,  574, 520,  574, 520,  576, 1610,  576, 1606,  576, 1606,  576, 1610,  610};  // COOLIX B23F70  
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -288,7 +276,7 @@ void twentytwo(String deviceId)
 }
 void twentythree(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*****") // Device ID of first device
   {
   uint16_t rawData[199] = {4438, 4356,  578, 1606,  576, 520,  574, 1610,  574, 1606,  576, 522,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1606,  574, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  574, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1606,  576, 522,  574, 1610,  576, 520,  574, 520,  574, 520,  574, 522,  574, 1610,  576, 520,  574, 1610,  576, 520,  574, 1610,  576, 1606,  576, 1608,  574, 1606,  610, 5172,  4436, 4356,  578, 1606,  576, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  576, 1604,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 524,  574, 520,  576, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  574, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1604,  576, 520,  576, 1610,  574, 520,  574, 520,  574, 520,  574, 522,  574, 1612,  576, 520,  574, 1610,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1610,  610};  // COOLIX B23F50
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -298,7 +286,7 @@ void twentythree(String deviceId)
 }
 void twentyfour(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "******") // Device ID of first device
   {
   uint16_t rawData[199] = {4448, 4336,  578, 1606,  576, 520,  576, 1610,  576, 1606,  576, 522,  574, 520,  576, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  576, 520,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 524,  574, 520,  574, 1610,  576, 1606,  576, 1606,  578, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 518,  576, 522,  574, 522,  574, 1606,  576, 520,  574, 522,  574, 520,  574, 520,  574, 520,  574, 522,  574, 1612,  576, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  610, 5180,  4436, 4356,  578, 1606,  576, 522,  574, 1612,  574, 1608,  574, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 522,  572, 520,  576, 1604,  576, 1608,  576, 520,  574, 1612,  576, 524,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1614,  576, 1606,  576, 520,  576, 520,  574, 520,  574, 520,  574, 520,  574, 522,  576, 522,  574, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 1612,  576, 520,  574, 1610,  576, 1606,  576, 1606,  574, 1606,  576, 1606,  574, 1610,  610};  // COOLIX B23F40
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -308,7 +296,7 @@ void twentyfour(String deviceId)
 }
 void twentyfive(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*******") // Device ID of first device
   {
   uint16_t rawData[199] = {4438, 4364,  578, 1606,  576, 520,  574, 1610,  574, 1606,  576, 520,  574, 520,  574, 1606,  576, 524,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  576, 520,  574, 520,  576, 520,  574, 522,  576, 1610,  576, 1606,  576, 520,  574, 520,  576, 518,  574, 520,  574, 520,  574, 522,  574, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  610, 5180,  4436, 4356,  578, 1606,  576, 522,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1606,  576, 1606,  576, 522,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  574, 1606,  576, 1606,  576, 1606,  574, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1608,  576, 1606,  576, 1610,  610};  // COOLIX B23FC0
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -318,7 +306,7 @@ void twentyfive(String deviceId)
 }
 void twentysix(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*****") // Device ID of first device
   {
   uint16_t rawData[199] = {4416, 4400,  578, 1606,  576, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  576, 520,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 524,  574, 520,  576, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1614,  576, 1606,  576, 520,  574, 520,  576, 518,  576, 520,  574, 520,  576, 522,  574, 1612,  576, 1606,  576, 520,  574, 1610,  576, 520,  574, 520,  574, 520,  574, 522,  576, 522,  574, 520,  574, 1610,  576, 522,  574, 1610,  576, 1606,  576, 1606,  576, 1608,  610, 5174,  4436, 4358,  578, 1608,  576, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1604,  576, 1608,  574, 1614,  574, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 1610,  576, 1606,  576, 520,  574, 1610,  576, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 520,  574, 1610,  576, 520,  574, 1610,  574, 1606,  574, 1606,  576, 1610,  610};  // COOLIX B23FD0
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -328,7 +316,7 @@ void twentysix(String deviceId)
 }
 void twentyseven(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*****") // Device ID of first device
   {
   uint16_t rawData[199] = {4474, 4336,  578, 1606,  576, 520,  574, 1610,  576, 1606,  574, 522,  574, 522,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  576, 1608,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 518,  576, 520,  574, 520,  576, 520,  574, 1612,  574, 520,  574, 520,  574, 1606,  576, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1606,  574, 1606,  576, 520,  576, 1608,  576, 1606,  574, 1606,  576, 1608,  610, 5180,  4434, 4356,  578, 1606,  576, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1604,  576, 522,  576, 522,  574, 1608,  576, 520,  576, 520,  574, 1604,  576, 1606,  576, 520,  574, 1612,  574, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1610,  574, 1612,  576, 1606,  574, 520,  574, 520,  574, 520,  576, 520,  574, 520,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1604,  576, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1604,  576, 1606,  576, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1608,  610};  // COOLIX B23F90
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -338,7 +326,7 @@ void twentyseven(String deviceId)
 }
 void twentyeight(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "******) // Device ID of first device
   {
   uint16_t rawData[199] = {4414, 4398,  578, 1606,  574, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1608,  576, 520,  574, 520,  574, 1604,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  574, 1606,  576, 1606,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 518,  574, 520,  574, 520,  576, 522,  574, 1610,  576, 520,  574, 522,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1610,  574, 1606,  576, 1606,  574, 1606,  576, 1606,  576, 1604,  576, 1608,  610, 5180,  4436, 4356,  578, 1606,  576, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1604,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1606,  574, 1608,  574, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  574, 1606,  576, 1606,  574, 1608,  576, 1612,  574, 1606,  576, 520,  574, 520,  574, 520,  576, 518,  574, 520,  574, 522,  574, 1612,  576, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 520,  574, 522,  574, 522,  574, 1610,  574, 1606,  576, 1606,  574, 1608,  576, 1606,  576, 1608,  574, 1610,  610};  // COOLIX B23F80
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -348,7 +336,7 @@ void twentyeight(String deviceId)
 }
 void twentynine(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "******") // Device ID of first device
   {
   uint16_t rawData[199] = {4438, 4368,  578, 1606,  576, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1606,  576, 522,  576, 522,  576, 1610,  574, 520,  574, 520,  574, 1604,  576, 1606,  576, 520,  576, 1610,  576, 524,  574, 520,  576, 1610,  576, 1606,  576, 1608,  574, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  576, 1612,  576, 520,  574, 1610,  576, 522,  574, 520,  574, 520,  574, 520,  576, 522,  576, 522,  574, 1610,  576, 520,  574, 1610,  574, 1606,  576, 1606,  576, 1606,  576, 1606,  610, 5172,  4436, 4356,  578, 1606,  576, 520,  574, 1610,  576, 1606,  576, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  574, 520,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 524,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 522,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 1612,  576, 520,  574, 1610,  576, 520,  574, 522,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1610,  576, 522,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1610,  610};  // COOLIX B23FA0
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -358,7 +346,7 @@ void twentynine(String deviceId)
 }
 void thirty(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "****") // Device ID of first device
   {
   uint16_t rawData[199] = {4388, 4398,  578, 1606,  576, 520,  574, 1610,  576, 1606,  576, 522,  574, 522,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 520,  576, 520,  574, 1604,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  576, 1606,  576, 1606,  576, 1606,  576, 1606,  576, 1608,  576, 1612,  576, 1606,  576, 520,  574, 520,  574, 520,  576, 520,  574, 520,  574, 522,  574, 1612,  576, 522,  574, 1610,  576, 1606,  576, 522,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1606,  576, 520,  574, 520,  576, 1604,  576, 1606,  576, 1606,  576, 1608,  610, 5182,  4438, 4356,  578, 1608,  574, 520,  574, 1610,  576, 1608,  576, 520,  574, 520,  574, 1606,  576, 522,  574, 522,  574, 1610,  576, 522,  574, 520,  574, 1606,  576, 1606,  576, 520,  574, 1612,  576, 522,  574, 520,  574, 1610,  574, 1608,  576, 1606,  576, 1606,  576, 1608,  574, 1608,  576, 1612,  576, 1606,  574, 522,  574, 520,  574, 520,  574, 520,  574, 520,  574, 522,  574, 1612,  576, 522,  572, 1610,  576, 1606,  576, 520,  574, 520,  574, 520,  574, 522,  574, 522,  574, 1606,  576, 520,  574, 520,  576, 1604,  576, 1606,  576, 1608,  574, 1610,  610};  // COOLIX B23FB0
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -368,7 +356,7 @@ void thirty(String deviceId)
 }
 void cool(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*****") // Device ID of first device
   {
   uint16_t rawData[199] = {4436, 4366,  576, 1608,  574, 522,  572, 1612,  574, 1608,  574, 522,  572, 522,  574, 1606,  574, 524,  574, 524,  572, 1610,  574, 522,  572, 522,  572, 1608,  574, 1608,  574, 522,  572, 1614,  574, 524,  572, 522,  572, 1612,  574, 1608,  574, 1608,  574, 1608,  574, 1608,  574, 1610,  574, 1614,  574, 1608,  574, 522,  572, 522,  572, 522,  572, 522,  572, 522,  572, 522,  574, 1612,  574, 1608,  574, 522,  572, 522,  574, 522,  572, 522,  572, 522,  574, 522,  574, 524,  574, 520,  574, 1610,  574, 1608,  574, 1608,  574, 1608,  574, 1608,  574, 1608,  608, 5182,  4432, 4358,  576, 1608,  574, 522,  572, 1612,  574, 1608,  574, 522,  572, 522,  572, 1608,  572, 524,  572, 524,  574, 1612,  574, 522,  572, 522,  572, 1608,  574, 1608,  574, 522,  572, 1614,  572, 524,  572, 522,  572, 1612,  572, 1608,  574, 1608,  574, 1608,  574, 1608,  574, 1610,  572, 1614,  574, 1608,  574, 524,  572, 522,  572, 522,  572, 522,  572, 522,  572, 524,  572, 1614,  572, 1610,  574, 522,  572, 522,  572, 522,  574, 520,  574, 520,  574, 524,  572, 524,  574, 522,  572, 1612,  572, 1608,  574, 1608,  574, 1606,  574, 1608,  574, 1610,  606};  // COOLIX B23FC0
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -378,7 +366,7 @@ void cool(String deviceId)
 }
 void dry(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "*****") // Device ID of first device
   {
   uint16_t rawData[199] = {4436, 4366,  574, 1610,  572, 522,  574, 1612,  574, 1608,  574, 524,  572, 522,  572, 1608,  572, 526,  572, 524,  572, 1612,  574, 522,  572, 522,  574, 1608,  572, 1610,  574, 522,  572, 1614,  572, 526,  572, 522,  572, 522,  572, 1608,  572, 1608,  574, 1608,  572, 1610,  572, 1610,  572, 1616,  572, 1608,  574, 1608,  574, 522,  572, 522,  572, 522,  572, 522,  572, 524,  572, 1610,  572, 1608,  574, 522,  572, 522,  572, 522,  572, 1612,  572, 522,  572, 526,  572, 524,  572, 522,  572, 1612,  572, 1608,  572, 1608,  574, 522,  572, 1612,  572, 1610,  608, 5184,  4432, 4360,  574, 1610,  574, 522,  572, 1614,  572, 1610,  572, 524,  572, 522,  572, 1608,  572, 526,  570, 526,  572, 1612,  574, 524,  570, 524,  572, 1608,  574, 1610,  572, 524,  572, 1614,  574, 524,  572, 524,  572, 522,  572, 1608,  572, 1608,  574, 1610,  572, 1610,  572, 1610,  574, 1614,  574, 1608,  574, 1608,  572, 524,  572, 522,  572, 522,  572, 524,  570, 524,  572, 1610,  572, 1610,  572, 524,  572, 522,  572, 522,  572, 1614,  572, 524,  570, 526,  572, 524,  572, 522,  572, 1612,  574, 1608,  572, 1608,  574, 524,  570, 1612,  574, 1610,  608};  // COOLIX B21FC4
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -388,7 +376,7 @@ void dry(String deviceId)
 }
 void autom(String deviceId)
 {
-  if (deviceId == "id") // Device ID of first device
+  if (deviceId == "******") // Device ID of first device
   {
   uint16_t rawData[199] = {4436, 4368,  574, 1610,  574, 522,  572, 1612,  574, 1608,  574, 522,  572, 522,  572, 1608,  574, 524,  572, 524,  572, 1612,  574, 522,  572, 522,  572, 1608,  574, 1608,  574, 522,  572, 1616,  572, 524,  572, 522,  574, 522,  574, 1608,  574, 1608,  574, 1608,  572, 1608,  574, 1610,  574, 1614,  574, 1608,  574, 1608,  574, 522,  572, 522,  574, 522,  572, 522,  572, 524,  574, 1608,  574, 1608,  574, 522,  574, 522,  572, 1608,  574, 522,  572, 522,  572, 524,  574, 524,  574, 522,  572, 1608,  574, 1608,  574, 522,  572, 1612,  574, 1608,  574, 1608,  608, 5162,  4434, 4360,  576, 1610,  574, 522,  572, 1612,  574, 1610,  574, 522,  572, 522,  574, 1606,  574, 524,  572, 524,  572, 1612,  574, 522,  572, 522,  572, 1608,  574, 1610,  574, 522,  574, 1614,  574, 524,  572, 522,  572, 522,  572, 1608,  574, 1608,  576, 1608,  574, 1608,  574, 1610,  574, 1614,  574, 1608,  574, 1608,  574, 522,  572, 522,  572, 522,  574, 522,  572, 524,  572, 1610,  574, 1608,  574, 522,  572, 522,  574, 1608,  574, 522,  572, 522,  572, 524,  572, 524,  574, 522,  572, 1608,  572, 1608,  574, 522,  574, 1612,  574, 1610,  572, 1612,  606};  // COOLIX B21FC8
   irsend.sendRaw(rawData, 199, 38);  // Send a raw data capture at 38kHz. 
@@ -440,15 +428,16 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
         if(action == "setPowerState") { // On or Off
           String value = json ["value"];
           Serial.println("[WSc] setPowerState" + value);
-          if(value == "ON") {
-             readTempature();
-                turnOn(deviceId);
-            } else {
-               readTempature();
-                turnOff(deviceId);
+          if(value == "ON" && deviceId == "*****") {
+              turnOn(deviceId);
+            } else if (value == "OFF" && deviceId == "******") {
+              turnOff(deviceId);
+            }
+            else{
+              Serial.print("Dropped Unknown");
             }
         }
-        else if(action == "SetTargetTemperature") { 
+        else if(action == "SetTargetTemperature" && deviceId == "******") { 
           // Alexa, set thermostat to 20      
           //String value = json ["value"];
           String value = json["value"]["targetSetpoint"]["value"];
@@ -516,16 +505,16 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
           {
             thirty(deviceId);
             Serial.println("Set to 30");
-            setSetTemperatureSettingOnServer("id", 30, "CELSIUS", roomtemp, humid);
+            setSetTemperatureSettingOnServer("*****", 30, "CELSIUS", roomtemp, humid);
           }
           else if(value<="19")             // Check if value is lower than or equal to 19°C. If so then set value to 20°C.
           {
             twenty(deviceId);
             Serial.println("Set to 20");
-            setSetTemperatureSettingOnServer("id", 20, "CELSIUS", roomtemp, humid);
+            setSetTemperatureSettingOnServer("******", 20, "CELSIUS", roomtemp, humid);
           }
         }
-        else if(action == "AdjustTargetTemperature") {
+        else if(action == "AdjustTargetTemperature" && deviceId == "*****") {
           //Alexa, make it warmer in here
           //Alexa, make it cooler in here
           String value = json["value"]["targetSetpointDelta"]["value"];
@@ -544,7 +533,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             Serial.println("Warmer");
           }
         }
-        else if(action == "SetThermostatMode") { 
+        else if(action == "SetThermostatMode" && deviceId == "******") { 
           //Alexa, set thermostat name to mode
           //Alexa, set thermostat to automatic
           //Alexa, set kitchen to off
@@ -584,11 +573,13 @@ void setup() {
   irsend.begin();
   pinMode(LED_BUILTIN, OUTPUT);     // Initialize the LED_BUILTIN pin as an output
   pinMode(2, OUTPUT);     // Initialize GPIO2 pin as an output
+  WiFi.hostname("Sahil's AirConditioner");
   WiFiMulti.addAP(MySSID, MyWifiPassword);
   Serial.println();
   Serial.print("Connecting to Wifi: ");
-  Serial.println(MySSID);  
-
+  Serial.println(MySSID); 
+  MDNS.begin("Sahil's AirConditioner"); 
+  WiFi.reconnect();
   // Waiting for Wifi connect
   while(WiFiMulti.run() != WL_CONNECTED) {
     delay(500);
@@ -596,13 +587,14 @@ void setup() {
     digitalWrite(LED_BUILTIN, LOW);   // Turn the LED on by making the voltage LOW
 
   }
+  WiFi.setAutoReconnect(true);
   if(WiFiMulti.run() == WL_CONNECTED) {
     Serial.println("");
     Serial.print("WiFi connected. ");
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
     digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off by making the voltage HIGH
-  }
+    }
 
   dht.setup(14, DHTesp::DHT11); // Connect DHT sensor to GPIO 4
 
@@ -615,13 +607,42 @@ void setup() {
   
   // try again every 5000ms if connection has failed
   webSocket.setReconnectInterval(5000);   // If you see 'class WebSocketsClient' has no member named 'setReconnectInterval' error update arduinoWebSockets
+  readTempature();
+  ArduinoOTA.setHostname("Sahil's AirConditioner");
+  ArduinoOTA.setPassword("esp8266");
+
+  ArduinoOTA.onStart([]() {
+    Serial.println("Start");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+  ArduinoOTA.begin();
+  Serial.println("Ready For OTA");
 }
 
 void loop() {
   webSocket.loop();
-  
+  ArduinoOTA.handle();
+  uint64_t now = millis();
+  if((now - WifiStatusTimeStamp) > WIFI_INTERVAL) {
+    if ( WiFi.status() != WL_CONNECTED ){
+      WifiStatusTimeStamp = now;
+      ESP.restart();
+    }
+  }
   if(isConnected) {
-      uint64_t now = millis();
       
       // Send heartbeat in order to avoid disconnections during ISP resetting IPs over night. Thanks @MacSass
       if((now - heartbeatTimestamp) > HEARTBEAT_INTERVAL) {
@@ -660,12 +681,10 @@ void readTempature() {
   Serial.println(dht.computeHeatIndex(dht.toFahrenheit(temperature), humidity, true), 1);
 //eg: setSetTemperatureSettingOnServer("deviceid", Thermostat Temperature, "CELSIUS" or "FAHRENHEIT", 23.0, 45.3)
 // setPoint: Indicates the target temperature to set on the termostat.
-  setSetTemperatureSettingOnServer("id", currenttemp, "CELSIUS", temperature, humidity);  
+  setSetTemperatureSettingOnServer("*****", currenttemp, "CELSIUS", temperature, humidity);  
   digitalWrite(2, LOW);   // Turn the LED on by making the voltage LOW
-  delay(1000);            // Wait for a second   
+  delay(500);            // Wait for a second   
   digitalWrite(2, HIGH);  // Turn the LED off by making the voltage HIGH
-  delay(1000);
-  
 }
 
 // If you are going to use a push button to on/off the switch manually, use this function to update the status on the server
